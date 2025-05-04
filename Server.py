@@ -10,23 +10,28 @@ class FileServer:
         self.clients = []
         self.file_path = None
         self.ready_to_send = threading.Event()
+        self.running = False
 
     def start(self):
-        self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen(5)
-        print(f"Server started on {self.host}:{self.port}")
-        
-        # Start input handler thread
-        input_thread = threading.Thread(target=self.handle_input)
-        input_thread.daemon = True
-        input_thread.start()
+        try:
+            # Add socket reuse option
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.bind((self.host, self.port))
+            self.server_socket.listen(5)
+            self.running = True
+            print(f"Server started on {self.host}:{self.port}")
+            return True
+        except OSError as e:
+            print(f"Failed to start server: {e}")
+            # Clean up the socket
+            self.server_socket.close()
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            return False
 
-        while True:
-            client_socket, address = self.server_socket.accept()
-            print(f"Client connected from {address}")
-            self.clients.append(client_socket)
-            client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
-            client_thread.start()
+    def stop(self):
+        self.running = False
+        if hasattr(self, 'server_socket'):
+            self.server_socket.close()
 
     def handle_input(self):
         while True:
