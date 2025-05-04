@@ -2,61 +2,100 @@ import socket
 import threading
 import os
 
-clients = []
-def send_file(connection, filename):
-    """invia un file al client."""
-    if os.path.exists(filename):
-        with open(filename, "rb") as file:
-            connection.sendall(file.read())
-        print(f"File '{filename}' inviato con successo!")
-    else:
-        connection.sendall(b"ERROR: File non trovato")
-        print(f"Errore: File '{filename}' non trovato.")
+class FileServer:
+    def __init__(self, host='0.0.0.0', port=5000):
+        self.host = host
+        self.port = port
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.clients = []
+        self.file_path = None
+        self.ready_to_send = threading.Event()
 
-def handle_client(connection, address):
-    """Gestisce un client connesso."""
-    print(f"\nNuovo client connesso: {address}")
-    clients.append(connection)
-    try:
+    def start(self):
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(5)
+        print(f"Server started on {self.host}:{self.port}")
+        
+        # Start input handler thread
+        input_thread = threading.Thread(target=self.handle_input)
+        input_thread.daemon = True
+        input_thread.start()
+
         while True:
-            data = connection.recv(4096)
-            if not data:
-                break  # Se il client si disconnette, esce dal loop
-    finally:
-        clients.remove(connection)
-        connection.close()
-        print(f"Connessione chiusa con il client: {address}")
+            client_socket, address = self.server_socket.accept()
+            print(f"Client connected from {address}")
+            self.clients.append(client_socket)
+            client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
+            client_thread.start()
 
-def send_file_to_all(filename):
-    """Chiede conferma e invia il file a tutti i client connessi."""
-    conferma = input(f"Inviare il file '{filename}' a tutti i client? (s/n): ").strip().lower()
-    if conferma == "s":
-        for client in clients:
+    def handle_input(self):
+        while True:
+            cmd = input("Press Enter to send a file to clients (or 'q' to quit): ").strip()
+            if cmd.lower() == 'q':
+                break
+                
+            # Get file path from user input
+            self.file_path = input("Enter file path to send: ")
+            if not os.path.exists(self.file_path):
+                print("File does not exist!")
+                continue
+                
+            self.ready_to_send.set()
+
+    def handle_client(self, client_socket):
+        try:
+            while True:
+                # Wait for client to be ready
+                client_socket.recv(1024)
+                
+                # Wait for server confirmation
+                self.ready_to_send.wait()
+                
+                if self.file_path:
+                    # Get file size
+                    file_size = os.path.getsize(self.file_path)
+                    file_name = os.path.basename(self.file_path)
+
+                    try:
+                        # Send file info
+                        client_socket.send(f"{file_name}|{file_size}".encode())
+
+                        # Send file data
+                        with open(self.file_path, 'rb') as f:
+                            while True:
+                                data = f.read(1024)
+                                if not data:
+                                    break
+                                client_socket.send(data)
+                        print(f"File {file_name} sent successfully to client")
+                    except Exception as e:
+                        print(f"Error sending to client: {e}")
+
+                # Wait for next file
+                self.ready_to_send.clear()
+
+        except Exception as e:
+            print(f"Error handling client: {e}")
+        finally:
+            self.clients.remove(client_socket)
+            client_socket.close()
+
+    def broadcast_file(self, file_path):
+        if not self.clients:
+            print("No clients connected!")
+            return
+        
+        if not os.path.exists(file_path):
+            print("File does not exist!")
+            return
+
+        for client in self.clients:
             try:
-                client.sendall(f"FILE_IN_ARRIVO {filename}".encode())
-                send_file(client, filename)  # Invia il file
-            except Exception as e:
-                print(f"Errore nell'invio al client: {e}")
-    else:
-        print("Invio annullato.")
+                # Notify client
+                client.send("FILE_INCOMING".encode())
+            except:
+                self.clients.remove(client)
 
-server_address = ('127.0.0.1', 12345)
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.bind(server_address)
-server_socket.listen(5)
-print(f"Server in ascolto su {server_address[0]}:{server_address[1]}")
-def accept_clients():
-    while True:
-        connection, client_address = server_socket.accept()
-        client_thread = threading.Thread(target=handle_client, args=(connection, client_address))
-        client_thread.start()
-
-threading.Thread(target=accept_clients, daemon=True).start()
-
-while True:
-    filename = input("Inserisci il nome del file da inviare (o 'exit' per uscire): ").strip()
-    if filename.lower() == "exit":
-        break
-    send_file_to_all(filename)
-
-server_socket.close()
+if __name__ == "__main__":
+    server = FileServer()
+    server.start()
