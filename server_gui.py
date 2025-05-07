@@ -4,11 +4,13 @@ from Server import FileServer
 
 class ServerGUI:
     def __init__(self):
+        # Inizializzazione della finestra principale
         self.window = tk.Tk()
         self.window.title("FileCast Server")
         self.window.geometry("400x500")
         
-        self.server = FileServer(port=65432)  # Using a less common port
+        # Creazione del server e configurazione callback
+        self.server = FileServer(port=65432)
         self.server.set_callbacks(
             client_callback=self.update_client_list,
             status_callback=self.update_status
@@ -16,7 +18,7 @@ class ServerGUI:
         self.setup_gui()
 
     def setup_gui(self):
-        # Server controls
+        # Controlli del server
         control_frame = ttk.Frame(self.window, padding="5")
         control_frame.pack(fill='x', padx=5, pady=5)
         
@@ -27,12 +29,12 @@ class ServerGUI:
         self.file_button.pack(side='left', padx=5)
         self.file_button['state'] = 'disabled'
         
-        # Status display
+        # Display stato server
         self.status_var = tk.StringVar(value="Server not running")
         status_label = ttk.Label(self.window, textvariable=self.status_var)
         status_label.pack(pady=5)
         
-        # Client list
+        # Lista client connessi
         client_frame = ttk.LabelFrame(self.window, text="Connected Clients", padding="5")
         client_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
@@ -40,6 +42,7 @@ class ServerGUI:
         self.client_list.pack(fill='both', expand=True)
 
     def toggle_server(self):
+        # Gestisce avvio/arresto del server
         if self.start_button['text'] == "Start Server":
             if self.server.start():
                 self.start_button['text'] = "Stop Server"
@@ -53,18 +56,20 @@ class ServerGUI:
             self.client_list.delete(0, tk.END)
 
     def select_file(self):
+        # Seleziona il file da inviare
         file_path = filedialog.askopenfilename()
         if file_path:
             self.server.set_file(file_path)
             self.update_status(f"Selected file: {file_path}")
 
     def update_status(self, status):
+        # Aggiorna lo stato visualizzato
         self.status_var.set(status)
         self.window.update_idletasks()
 
     def update_client_list(self, client_info, remove=False):
+        # Aggiorna la lista dei client connessi
         if remove:
-            # Find and remove client from list
             items = self.client_list.get(0, tk.END)
             for idx, item in enumerate(items):
                 if client_info in item:
@@ -75,6 +80,7 @@ class ServerGUI:
         self.window.update_idletasks()
 
     def run(self):
+        # Avvia l'interfaccia
         self.window.mainloop()
 
 if __name__ == "__main__":
