@@ -13,7 +13,6 @@ FileCast è un'applicazione per il trasferimento di file tramite rete locale, sv
 ## Requisiti
 
 - Python 3.6 o superiore
-- Tkinter (solitamente incluso con Python)
 
 ## Installazione
 
@@ -22,8 +21,6 @@ FileCast è un'applicazione per il trasferimento di file tramite rete locale, sv
 git clone https://github.com/tuousername/FileCast.git
 cd FileCast
 ```
-
-2. Nessuna dipendenza aggiuntiva richiesta!
 
 ## Utilizzo
 
@@ -61,9 +58,9 @@ FileCast/
 
 ## Come Funziona
 
-1. Il server viene avviato e rimane in ascolto su una porta specificata (default: 65432)
+1. Il server viene avviato e rimane in ascolto
 2. I client possono connettersi al server usando l'indirizzo IP locale
-3. Quando il server seleziona un file, questo viene inviato a tutti i client connessi
+3. Quando il server seleziona un file, viene inviato a tutti i client connessi
 4. I client salvano i file ricevuti nella directory specificata
 
 ## TODO
