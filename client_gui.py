@@ -1,8 +1,7 @@
 import tkinter as tk
-from tkinter import ttk
-from Client import FileClient
-import threading
+from tkinter import ttk, filedialog
 import os
+from Client import FileClient
 
 class ClientGUI:
     def __init__(self):
@@ -11,6 +10,11 @@ class ClientGUI:
         self.window.geometry("400x500")
         
         self.client = FileClient(port=65432)  # Match server port
+        self.client.set_callbacks(
+            status_callback=self.update_status,
+            progress_callback=self.update_progress,
+            file_callback=self.update_file_list
+        )
         self.setup_gui()
 
     def setup_gui(self):
@@ -26,11 +30,23 @@ class ClientGUI:
         status_label = ttk.Label(self.window, textvariable=self.status_var)
         status_label.pack(pady=5)
         
-        # File list
+        # Save location display
+        save_frame = ttk.Frame(self.window, padding="5")
+        save_frame.pack(fill='x', padx=5, pady=5)
+        
+        ttk.Label(save_frame, text="Save Location:").pack(side='left', padx=5)
+        self.save_location = ttk.Label(save_frame, text=self.client.download_dir)
+        self.save_location.pack(side='left', padx=5)
+        
+        browse_button = ttk.Button(save_frame, text="Browse", command=self.choose_save_location)
+        browse_button.pack(side='right', padx=5)
+        
+        # File list with full paths
         files_frame = ttk.LabelFrame(self.window, text="Received Files", padding="5")
         files_frame.pack(fill='both', expand=True, padx=5, pady=5)
         
-        self.file_list = tk.Listbox(files_frame)
+        self.file_list = ttk.Treeview(files_frame, columns=("path",), show="tree headings")
+        self.file_list.heading("path", text="File Path")
         self.file_list.pack(fill='both', expand=True)
         
         # Progress bar
@@ -45,25 +61,31 @@ class ClientGUI:
     def toggle_connection(self):
         if self.connect_button['text'] == "Connect":
             self.connect_button['text'] = "Disconnect"
-            self.status_var.set("Connecting...")
-            # Start connection in separate thread
-            threading.Thread(target=self.connect).start()
+            self.update_status("Connecting...")
+            self.client.start_connection()
         else:
-            self.client.running = False
+            self.client.disconnect()
             self.connect_button['text'] = "Connect"
-            self.status_var.set("Disconnected")
+            self.update_status("Disconnected")
 
-    def connect(self):
-        try:
-            self.client.connect()
-            self.status_var.set("Connected")
-        except Exception as e:
-            self.status_var.set(f"Connection failed: {e}")
-            self.connect_button['text'] = "Connect"
+    def update_status(self, status):
+        self.status_var.set(status)
+        self.window.update_idletasks()
 
     def update_progress(self, received, total):
         progress = (received / total) * 100
         self.progress_var.set(progress)
+        self.window.update_idletasks()
+
+    def choose_save_location(self):
+        directory = filedialog.askdirectory(initialdir=self.client.download_dir)
+        if directory:
+            self.client.set_download_directory(directory)
+            self.save_location.config(text=directory)
+
+    def update_file_list(self, filepath):
+        filename = os.path.basename(filepath)
+        self.file_list.insert("", "end", text=filename, values=(filepath,))
         self.window.update_idletasks()
 
     def run(self):

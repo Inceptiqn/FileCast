@@ -9,12 +9,40 @@ class FileClient:
         self.port = port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.download_queue = queue.Queue()
+        self.running = False
+        self.status_callback = None
+        self.progress_callback = None
+        self.file_callback = None
+        self.connection_thread = None
+        self.download_dir = os.path.join(os.getcwd(), 'downloads')
+
+    def set_callbacks(self, status_callback=None, progress_callback=None, file_callback=None):
+        self.status_callback = status_callback
+        self.progress_callback = progress_callback
+        self.file_callback = file_callback
+
+    def set_download_directory(self, directory):
+        self.download_dir = directory
+        if not os.path.exists(self.download_dir):
+            os.makedirs(self.download_dir)
+
+    def start_connection(self):
         self.running = True
+        self.connection_thread = threading.Thread(target=self.connect)
+        self.connection_thread.daemon = True
+        self.connection_thread.start()
+
+    def disconnect(self):
+        self.running = False
+        self.download_queue.put(None)  # Signal worker to stop
+        if self.socket:
+            self.socket.close()
 
     def connect(self):
         try:
             self.socket.connect((self.host, self.port))
-            print(f"Connected to server at {self.host}:{self.port}")
+            if self.status_callback:
+                self.status_callback("Connected")
             
             # Start download worker thread
             download_thread = threading.Thread(target=self.download_worker)
@@ -25,7 +53,8 @@ class FileClient:
             self.receive_files()
             
         except Exception as e:
-            print(f"Connection failed: {e}")
+            if self.status_callback:
+                self.status_callback(f"Connection failed: {e}")
 
     def download_worker(self):
         while self.running:
@@ -37,16 +66,20 @@ class FileClient:
                 file_name, file_size, data = file_info
                 
                 # Create downloads directory if it doesn't exist
-                if not os.path.exists('downloads'):
-                    os.makedirs('downloads')
+                if not os.path.exists(self.download_dir):
+                    os.makedirs(self.download_dir)
 
                 # Write file
-                with open(os.path.join('downloads', file_name), 'wb') as f:
+                file_path = os.path.join(self.download_dir, file_name)
+                with open(file_path, 'wb') as f:
                     f.write(data)
-                print(f"File {file_name} received successfully")
+                
+                if self.file_callback:
+                    self.file_callback(file_path)  # Now passing full path
                 
             except Exception as e:
-                print(f"Error in download worker: {e}")
+                if self.status_callback:
+                    self.status_callback(f"Error in download: {e}")
             finally:
                 self.download_queue.task_done()
 
@@ -70,12 +103,16 @@ class FileClient:
                         break
                     data.extend(chunk)
                     received_size += len(chunk)
+                    
+                    if self.progress_callback:
+                        self.progress_callback(received_size, file_size)
 
                 # Add to download queue
                 self.download_queue.put((file_name, file_size, data))
 
             except Exception as e:
-                print(f"Error receiving file: {e}")
+                if self.status_callback:
+                    self.status_callback(f"Error receiving file: {e}")
                 break
 
         self.running = False
@@ -84,4 +121,4 @@ class FileClient:
 
 if __name__ == "__main__":
     client = FileClient()
-    client.connect()
+    client.start_connection()

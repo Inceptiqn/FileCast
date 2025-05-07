@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
 from Server import FileServer
-import threading
 
 class ServerGUI:
     def __init__(self):
@@ -10,6 +9,10 @@ class ServerGUI:
         self.window.geometry("400x500")
         
         self.server = FileServer(port=65432)  # Using a less common port
+        self.server.set_callbacks(
+            client_callback=self.update_client_list,
+            status_callback=self.update_status
+        )
         self.setup_gui()
 
     def setup_gui(self):
@@ -41,40 +44,35 @@ class ServerGUI:
             if self.server.start():
                 self.start_button['text'] = "Stop Server"
                 self.file_button['state'] = 'normal'
-                self.status_var.set("Server running")
-                # Start accept thread
-                self.accept_thread = threading.Thread(target=self.accept_clients)
-                self.accept_thread.daemon = True
-                self.accept_thread.start()
+                self.update_status("Server running")
         else:
             self.server.stop()
             self.start_button['text'] = "Start Server"
             self.file_button['state'] = 'disabled'
-            self.status_var.set("Server stopped")
+            self.update_status("Server stopped")
             self.client_list.delete(0, tk.END)
 
     def select_file(self):
         file_path = filedialog.askopenfilename()
         if file_path:
-            self.server.file_path = file_path
-            self.status_var.set(f"Selected file: {file_path}")
-            self.server.ready_to_send.set()
+            self.server.set_file(file_path)
+            self.update_status(f"Selected file: {file_path}")
 
-    def accept_clients(self):
-        while self.server.running:
-            try:
-                client_socket, address = self.server.server_socket.accept()
-                self.server.clients.append(client_socket)
-                self.client_list.insert(tk.END, f"Client: {address[0]}:{address[1]}")
-                client_thread = threading.Thread(
-                    target=self.server.handle_client,
-                    args=(client_socket,)
-                )
-                client_thread.daemon = True
-                client_thread.start()
-            except:
-                if self.server.running:  # Only show error if we're still supposed to be running
-                    self.status_var.set("Error accepting client")
+    def update_status(self, status):
+        self.status_var.set(status)
+        self.window.update_idletasks()
+
+    def update_client_list(self, client_info, remove=False):
+        if remove:
+            # Find and remove client from list
+            items = self.client_list.get(0, tk.END)
+            for idx, item in enumerate(items):
+                if client_info in item:
+                    self.client_list.delete(idx)
+                    break
+        else:
+            self.client_list.insert(tk.END, f"Client: {client_info}")
+        self.window.update_idletasks()
 
     def run(self):
         self.window.mainloop()
